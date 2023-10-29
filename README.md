@@ -47,12 +47,11 @@ Then, add *C:\vcpkg\installed\x64-windows\bin* and *C:\vcpkg\installed\x64-windo
 ### MP.1 Data Buffer Optimization
 
 Construct a vector for dataBuffer objects with a size constraint (e.g., 2 elements), by adding new elements at one end while eliminating elements at the other end.
-```
+```c++
 if (dataBuffer.size() > dataBufferSize) {
 	dataBuffer.erase(dataBuffer.begin());
 }
 dataBuffer.push_back(frame);
-
 
 ```
 
@@ -61,24 +60,196 @@ dataBuffer.push_back(frame);
 
 Incorporate detectors such as HARRIS, FAST, BRISK, ORB, AKAZE, and SIFT, and ensure their selection via setting a string accordingly.
 
+```c++
+void detKeypointsModern(vector<cv::KeyPoint> &keypoints, cv::Mat &img, std::string detectorType, bool bVis) {
+    // appropriate descriptor selection
+    cv::Ptr<cv::FeatureDetector> detector;
+    if (detectorType.compare("BRISK") == 0) {
+        detector = cv::BRISK::create();
+
+    } else if (detectorType.compare("AKAZE") == 0) {
+        detector = cv::AKAZE::create();
+
+    } else if (detectorType.compare("ORB") == 0) {
+        detector = cv::ORB::create();
+
+    } else if (detectorType.compare("FAST") == 0) {
+        int threshold = 30;// Intensity contrast between the central pixel and surrounding pixel circle 
+        bool nonmaxSuppression = true;// non-maxima suppression on keypoints execution
+        cv::FastFeatureDetector::DetectorType type = cv::FastFeatureDetector::TYPE_9_16;// TYPE_9_16, TYPE_7_12, TYPE_5_8
+        detector = cv::FastFeatureDetector::create(threshold, nonmaxSuppression, type);
+    } else if (detectorType.compare("SIFT") == 0) {
+        detector = cv::xfeatures2d::SIFT::create();
+    } else {
+        throw invalid_argument(
+                detectorType + " is not supported, FAST, BRISK, ORB, AKAZE, SIFT are valid detectorTypes");
+    }
+
+    // feature description execution
+    detector->detect(img, keypoints);
+    cout<<"Detection with n=" << keypoints.size() <<endl;
+    if (bVis) {
+        // Keypoints visualization
+        string windowName = detectorType + " keypoint detection results";
+        cv::namedWindow(windowName);
+        cv::Mat visImage = img.clone();
+        cv::drawKeypoints(img, keypoints, visImage, cv::Scalar::all(-1), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+        cv::imshow(windowName, visImage);
+        cv::waitKey(0);
+    }
+}
+
+```
+
 
 ### MP.3 Keypoint Removal
 
 Eliminate all keypoints outside a pre-defined rectangle, retaining only the keypoints within the rectangle for further processing.
 
+```c++
+// retain keypoints only on the preceding vehicle
+bool bFocusOnVehicle = true;
+cv::Rect vehicleRect(535, 180, 180, 150);
+vector<cv::KeyPoint> insidePoints;
+if (bFocusOnVehicle) {
+    for (auto keypt:keypoints) {
+        bool isinside = vehicleRect.contains(keypt.pt);
+        if (isinside) {
+            insidePoints.push_back(keypt);
+        }
+    }
+    keypoints = insidePoints;
+}
+
+
+```
+
 ### MP.4 Keypoint Descriptors
 
 Employ descriptors such as BRIEF, ORB, FREAK, AKAZE and SIFT, and enable their selection by setting a string accordingly.
+
+```c++
+void descKeypoints(vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &descriptors, string descriptorType) {
+    // appropriate descriptor selection
+    cv::Ptr<cv::DescriptorExtractor> extractor;
+    if (descriptorType.compare("BRIEF") == 0) {
+        int bytes = 32; // Descriptor length in bytes, valid values are: 16, 32 (default) or 64 .
+        bool use_orientation = false;// Utilize keypoints orientation, disabled by default.
+        extractor = cv::xfeatures2d::BriefDescriptorExtractor::create(bytes, use_orientation);
+    } else if (descriptorType.compare("AKAZE") == 0) {
+        auto descriptor_type = cv::AKAZE::DESCRIPTOR_MLDB;// Extracted descriptor type: DESCRIPTOR_KAZE, DESCRIPTOR_KAZE_UPRIGHT, DESCRIPTOR_MLDB or DESCRIPTOR_MLDB_UPRIGHT.
+        int descriptor_size = 0;// Descriptor size in bits. 0 -> Full size
+        int descriptor_channels = 3;// Descriptor channels count (1, 2, 3)
+        float threshold = 0.001f;// Response threshold for detector acceptance
+        int nOctaves = 4;// Maximum image octave evolution
+        int nOctaveLayers = 4;// Default sublevels per scale level count
+        auto diffusivity = cv::KAZE::DIFF_PM_G2;// Diffusivity type. DIFF_PM_G1, DIFF_PM_G2, DIFF_WEICKERT or DIFF_CHARBONNIER
+        extractor = cv::AKAZE::create(descriptor_type, descriptor_size, descriptor_channels, threshold, nOctaves,
+                                      nOctaveLayers, diffusivity);
+
+    } else if (descriptorType.compare("ORB") == 0) {
+        int nfeatures = 500;// Maximum features to retain.
+        float scaleFactor = 1.2f;// Pyramid decimation ratio, greater than 1.
+        int nlevels = 8;// Pyramid levels count.
+        int edgeThreshold = 31;// Border size where features are not detected.
+        int firstLevel = 0;// Pyramid level to put source image to.
+        int WTA_K = 2;// Points count producing each oriented BRIEF descriptor element.
+        auto scoreType = cv::ORB::HARRIS_SCORE;// Default HARRIS_SCORE implies Harris algorithm usage for feature ranking.
+        int patchSize = 31;// Oriented BRIEF descriptor patch size.
+        int fastThreshold = 20;// The fast threshold.
+        extractor = cv::ORB::create(nfeatures, scaleFactor, nlevels, edgeThreshold, firstLevel, WTA_K, scoreType,
+                                    patchSize, fastThreshold);
+    } else if (descriptorType.compare("FREAK") == 0) {
+        bool orientationNormalized = true;// Enable orientation normalization.
+        bool scaleNormalized = true;// Enable scale normalization.
+        float patternScale = 22.0f;// Description pattern scaling.
+        int nOctaves = 4;// Octaves count covered by the detected keypoints.
+        const std::vector<int> &selectedPairs = std::vector<int>(); // (Optional) user defined selected pairs indexes,
+        extractor = cv::xfeatures2d::FREAK::create(orientationNormalized, scaleNormalized, patternScale, nOctaves,
+                                                   selectedPairs);
+    } else if (descriptorType.compare("SIFT") == 0) {
+        int nfeatures = 0;// Best features count to retain.
+        int nOctaveLayers = 3;// Layers count in each octave. 3 is the value used in D. Lowe paper.
+        double contrastThreshold = 0.04;// Contrast threshold for weak features filtering in low-contrast (semi-uniform) regions.
+        double edgeThreshold = 10;// Threshold for edge-like features filtering.
+        double sigma = 1.6;// Gaussian sigma applied to the input image at the octave #0.
+        extractor = cv::xfeatures2d::SIFT::create(nfeatures, nOctaveLayers, contrastThreshold, edgeThreshold, sigma);
+    } else {
+        throw invalid_argument(descriptorType +
+                               " is not supported, Only BRIEF, ORB, FREAK, AKAZE and SIFT is allowed as input dor descriptor");
+    }
+
+    // feature description execution
+    extractor->compute(img, keypoints, descriptors);
+}
+
+
+```
 
 
 ### MP.5 Descriptor Matching
 
 Implement FLANN matching along with k-nearest neighbor selection. Both methods should be selectable through their respective strings in the main function.
 
+```c++
+bool crossCheck = false;
+cv::Ptr<cv::DescriptorMatcher> matcher;
+int normType;
+
+if (matcherType.compare("MAT_BF") == 0) {
+    int normType = descriptorclass.compare("DES_BINARY") == 0 ? cv::NORM_HAMMING : cv::NORM_L2;
+    matcher = cv::BFMatcher::create(normType, crossCheck);
+
+} else if (matcherType.compare("MAT_FLANN") == 0) {
+    if (descSource.type() !=
+        CV_32F) { // OpenCV bug workaround : convert binary descriptors to floating point due to a bug in current OpenCV implementation
+        descSource.convertTo(descSource, CV_32F);
+        // descRef.convertTo(descRef, CV_32F);
+    }
+    if (descRef.type() !=
+        CV_32F) { // OpenCV bug workaround : convert binary descriptors to floating point due to a bug in current OpenCV implementation
+        descRef.convertTo(descRef, CV_32F);
+    }
+    matcher = cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
+} else {
+    throw invalid_argument(matcherType + " is not supported, only MAT_FLANN and MAT_BF is valid matchertype ");
+}
+
+
+```
+
 
 ### MP.6 Descriptor Distance Ratio
 
 Utilize K-Nearest-Neighbor matching to execute the descriptor distance ratio test, which evaluates the ratio of the best versus second-best match to determine whether to retain a pair of associated keypoints.
+
+```c++
+// execute matching task
+if (selectorType.compare("SEL_NN") == 0) { // nearest neighbor (best match)
+    matcher->match(descSource, descRef, matches); // Finds the best match for each descriptor in desc1
+    cout <<"Descriptorclass: " <<descriptorclass <<" (NN) with n=" << matches.size() << endl;
+} else if (selectorType.compare("SEL_KNN") == 0) { // k nearest neighbors (k=2)
+
+    vector<vector<cv::DMatch>> knn_matches;
+    matcher->knnMatch(descSource, descRef, knn_matches, 2);
+    //-- Apply Lowe's ratio test for filtering
+    double minDescDistRatio = 0.8;
+    for (auto it = knn_matches.begin(); it != knn_matches.end(); ++it) {
+
+        if ((*it)[0].distance < minDescDistRatio * (*it)[1].distance) {
+            matches.push_back((*it)[0]);
+        }
+    }
+    cout <<"Descriptorclass: " <<descriptorclass<< " (KNN) with n=" << knn_matches.size() << "# keypoints removed = "
+         << knn_matches.size() - matches.size() << endl;
+
+} else {
+    throw invalid_argument(
+            selectorType + " is not supported, only SEL_NN and SEL_KNN  is valid selectorType for matcher ");
+}
+
+
+```
 
 
 ### MP.7  Performance Evaluation 1
