@@ -47,6 +47,14 @@ Then, add *C:\vcpkg\installed\x64-windows\bin* and *C:\vcpkg\installed\x64-windo
 ### MP.1 Data Buffer Optimization
 
 Construct a vector for dataBuffer objects with a size constraint (e.g., 2 elements), by adding new elements at one end while eliminating elements at the other end.
+```
+if (dataBuffer.size() > dataBufferSize) {
+	dataBuffer.erase(dataBuffer.begin());
+}
+dataBuffer.push_back(frame);
+
+
+```
 
 
 ### MP.2 Keypoint Detection
