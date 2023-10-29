@@ -93,7 +93,7 @@ It's clear that **FAST** provides the best detection speed and fairly good accur
 
 #### Neighborhood Distribution
 
-As depicted in the figure below, **Harris, Shi-Tomasi, and FAST** have relatively small neighborhood size and spatial distribution with no overlapping.
+**Harris, Shi-Tomasi, and FAST** have relatively small neighborhood size and spatial distribution with no overlapping.
 
 On the contrary, **BRISK and ORB** exhibit a very large neighborhood size and compact distribution resembling clusters with many overlapping areas.
 
